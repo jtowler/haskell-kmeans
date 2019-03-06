@@ -1,5 +1,7 @@
 import Data.Function (on)
-import Data.List (maximum, minimumBy, genericLength)
+import Data.List (groupBy, maximum, minimumBy, genericLength)
+import System.Random (getStdGen, randomRs) 
+import System.Environment
 
 data Point = Point Double Double deriving (Show, Eq)
 
@@ -29,10 +31,14 @@ updateMeans :: [Point] -> [Int] -> [Point]
 updateMeans points labels = map (\l -> updateMean $ pointsForLabel z l) [0..maximum labels]   
     where z = zip points labels
 
-minMax :: [Point] -> (Double, Double)
-minMax points = (x, y)
-    where x = maximum $ map (\(Point a b) -> a) points
-          y = maximum $ map (\(Point a b) -> b) points
+minMax :: [Point] -> (Point, Point)
+minMax points = (Point lx ly, Point ux uy)
+    where xs = map (\(Point a b) -> a) points
+          ys = map (\(Point a b) -> b) points
+          lx = minimum xs
+          ly = minimum ys
+          ux = maximum xs
+          uy = maximum ys
 
 runKMeans :: [Point] -> [Point] -> Int -> [Int]
 runKMeans points means iter
@@ -41,3 +47,24 @@ runKMeans points means iter
     | otherwise = runKMeans points newMeans $ iter - 1 
     where labels = assignToCluster points means
           newMeans = updateMeans points labels
+
+lineToPoint :: String -> Point
+lineToPoint line =
+    let (x:y:[]) = groupBy (\a b -> b /= ',') line
+        xd = read x :: Double
+        yd = read $ filter (\q -> q /= ',') y :: Double
+    in Point xd yd
+
+main = do
+    (k:fname:iters:_) <- getArgs 
+    gen <- getStdGen
+    d <- readFile fname
+    let l = lines d
+        ki = read k :: Int
+        points = map lineToPoint l
+        (Point minX minY, Point maxX maxY) = minMax points
+        xMeans = take ki (randomRs (minX,maxX) gen)
+        yMeans = take ki (randomRs (minY,maxY) gen)
+        means = zipWith (\a b -> Point a b) xMeans yMeans
+        labels = runKMeans points means (read iters :: Int)
+    mapM  (putStrLn . show) labels
