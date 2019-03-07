@@ -1,19 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
 import Data.Function (on)
 import Data.List (groupBy, maximum, minimumBy, genericLength)
-import System.Random (getStdGen, randomRs) 
+import System.Random (getStdGen, randomRs)
 import System.Environment
+import qualified Data.Text as T
 
-data Point = Point Double Double deriving (Show, Eq)
+data Point = Point {xPoint :: Double, yPoint :: Double} deriving (Show, Eq)
 
 assignToCluster :: [Point] -> [Point] -> [Int]
-assignToCluster [] _ = []
-assignToCluster (p:ps) means = (getBestCluster p means):(assignToCluster ps means)
+assignToCluster means = map assign
+  where
+    assign = getBestCluster means
 
-getBestCluster :: Point -> [Point] -> Int 
-getBestCluster p means = fst . minimumBy (compare `on` euclidean p . snd) $ zip [0..] means
+getBestCluster :: [Point] -> Point -> Int
+getBestCluster means p = fst . minimumBy (compare `on` euclidean p . snd) $ zip [0..] means
 
 euclidean :: Point -> Point -> Double
-euclidean (Point x1 y1) (Point x2 y2) = sqrt $ (x1 - x2) ** 2 + (y1 - y2) ** 2 
+euclidean (Point x1 y1) (Point x2 y2) = sqrt $ (x1 - x2) ** 2 + (y1 - y2) ** 2
 
 pointsForLabel :: [(Point, Int)] -> Int -> [Point]
 pointsForLabel points label = map fst filtered
@@ -24,17 +27,17 @@ mean xs = realToFrac (sum xs) / genericLength xs
 
 updateMean :: [Point] -> Point
 updateMean points = Point x y
-    where x = mean $ map (\(Point a b) -> a) points
-          y = mean $ map (\(Point a b) -> b) points
+    where x = mean $ map xPoint points
+          y = mean $ map yPoint points
 
 updateMeans :: [Point] -> [Int] -> [Point]
-updateMeans points labels = map (\l -> updateMean $ pointsForLabel z l) [0..maximum labels]   
+updateMeans points labels = map (\l -> updateMean $ pointsForLabel z l) [0..maximum labels]
     where z = zip points labels
 
 minMax :: [Point] -> (Point, Point)
 minMax points = (Point lx ly, Point ux uy)
-    where xs = map (\(Point a b) -> a) points
-          ys = map (\(Point a b) -> b) points
+    where xs = map xPoint points
+          ys = map yPoint points
           lx = minimum xs
           ly = minimum ys
           ux = maximum xs
@@ -43,20 +46,20 @@ minMax points = (Point lx ly, Point ux uy)
 runKMeans :: [Point] -> [Point] -> Int -> [Int]
 runKMeans points means iter
     | iter <= 0 = labels
-    | means == newMeans = labels 
-    | otherwise = runKMeans points newMeans $ iter - 1 
+    | means == newMeans = labels
+    | otherwise = runKMeans points newMeans $ iter - 1
     where labels = assignToCluster points means
           newMeans = updateMeans points labels
 
 lineToPoint :: String -> Point
 lineToPoint line =
-    let (x:y:[]) = groupBy (\a b -> b /= ',') line
-        xd = read x :: Double
-        yd = read $ filter (\q -> q /= ',') y :: Double
+    let (x:y:_) = T.splitOn "," $ T.pack line
+        xd = read (T.unpack x) :: Double
+        yd = read (T.unpack y) :: Double
     in Point xd yd
 
 main = do
-    (k:fname:iters:_) <- getArgs 
+    (k:fname:iters:_) <- getArgs
     gen <- getStdGen
     d <- readFile fname
     let l = lines d
